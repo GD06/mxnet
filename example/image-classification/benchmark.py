@@ -21,7 +21,7 @@ def setup_logging(log_loc):
         shutil.move(log_loc, log_loc + "_" + str(int(os.path.getctime(log_loc))))
     os.makedirs(log_loc)
 
-    log_file = '{}/benchmark.log'.format(log_loc)
+    log_file = '{}/benchmark.log.{}'.format(log_loc, time.time())
     LOGGER = logging.getLogger('benchmark')
     LOGGER.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s %(levelname)s:%(name)s %(message)s')
@@ -127,7 +127,7 @@ Choose the middle iteration to get the images processed per sec
 '''
 def images_processed(log_loc):
     f=open(log_loc)
-    img_per_sec = re.findall("(?:Batch\s+\[30\]\\\\tSpeed:\s+)(\d+\.\d+)(?:\s+)", str(f.readlines()))
+    img_per_sec = re.findall("(?:Batch\s+\[8]\\\\tSpeed:\s+)(\d+\.\d+)(?:\s+)", str(f.readlines()))
     f.close()
     img_per_sec = map(float, img_per_sec)
     total_img_per_sec = sum(img_per_sec)
@@ -141,17 +141,21 @@ def generate_hosts_file(num_nodes, workers_file, args_workers_file):
     return
 
 def stop_old_processes(hosts_file):
-    stop_args = ['python', '../../tools/kill-mxnet.py', hosts_file]
+    stop_args = ['python', '../../tools/kill-mxnet.py', hosts_file,
+                 'xfxie', 'train_imagenet.py']
     stop_args_str = ' '.join(stop_args)
     LOGGER.info('killing old remote processes\n %s', stop_args_str)
     stop = subprocess.check_output(stop_args, stderr=subprocess.STDOUT)
     LOGGER.debug(stop)
+
     time.sleep(1)
 
 def run_imagenet(kv_store, data_shape, batch_size, num_gpus, num_nodes, network, args_workers_file):
     imagenet_args=['python',  'train_imagenet.py',  '--gpus', ','.join(str(i) for i in range(num_gpus)), \
                    '--network', network, '--batch-size', str(batch_size * num_gpus), \
-                   '--image-shape', '3,' + str(data_shape) + ',' + str(data_shape), '--num-epochs', '1' ,'--kv-store', kv_store, '--benchmark', '1', '--disp-batches', '10']
+                   '--image-shape', '3,' + str(data_shape) + ',' +
+                   str(data_shape), '--num-epochs', '1' ,'--kv-store',
+                   kv_store, '--benchmark', '1', '--disp-batches', '1']
     log = log_loc + '/' + network + '_' + str(num_nodes*num_gpus) + '_log'
     hosts = log_loc + '/' + network + '_' + str(num_nodes*num_gpus) + '_workers'
     generate_hosts_file(num_nodes, hosts, args_workers_file)
@@ -164,7 +168,7 @@ def run_imagenet(kv_store, data_shape, batch_size, num_gpus, num_nodes, network,
         imagenet.startCmd(timeout = 60 * 10)
     else:
         launch = RunCmd(launch_args, log)
-        launch.startCmd(timeout = 60 * 10)
+        launch.startCmd(timeout = 60 * 10 * 10)
 
     stop_old_processes(hosts)
     img_per_sec = images_processed(log)
@@ -194,19 +198,24 @@ def write_csv(log_loc, args):
 
 def main():
     args = parse_args()
+
+    t = time.time()
     for net in args.networks:
         #use kv_store='device' when running on 1 node
-        for num_gpus in series(args.gpu_count):
-            imgs_per_sec = run_imagenet(kv_store='device', data_shape=net.img_size, batch_size=net.batch_size, \
-                                        num_gpus=num_gpus, num_nodes=1, network=net.name, args_workers_file=args.worker_file)
-            net.gpu_speedup[num_gpus] = imgs_per_sec
-        for num_nodes in series(args.worker_count)[1::]:
-            imgs_per_sec = run_imagenet(kv_store='dist_sync_device', data_shape=net.img_size, batch_size=net.batch_size, \
+        #for num_gpus in series(args.gpu_count):
+        #    imgs_per_sec = run_imagenet(kv_store='device', data_shape=net.img_size, batch_size=net.batch_size, \
+        #                                num_gpus=num_gpus, num_nodes=1, network=net.name, args_workers_file=args.worker_file)
+        #    net.gpu_speedup[num_gpus] = imgs_per_sec
+        num_nodes = args.worker_count
+        #for num_nodes in series(args.worker_count)[1::]:
+        imgs_per_sec = run_imagenet(kv_store='dist_sync_device', data_shape=net.img_size, batch_size=net.batch_size, \
                          num_gpus=args.gpu_count, num_nodes=num_nodes, network=net.name, args_workers_file=args.worker_file)
-            net.gpu_speedup[num_nodes * args.gpu_count] = imgs_per_sec
+        net.gpu_speedup[num_nodes * args.gpu_count] = imgs_per_sec
         LOGGER.info('Network: %s (num_gpus, images_processed): %s', net.name, ','.join(map(str, net.gpu_speedup.items())))
+    LOGGER.info('Total overall times (including making data and building graphs)')
+    LOGGER.info('%g secs' % (time.time() - t))
     write_csv(log_loc, args)
-    plot_graph(args)
+    #plot_graph(args)
 
 if __name__ == '__main__':
     main()

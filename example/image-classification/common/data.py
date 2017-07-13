@@ -74,7 +74,7 @@ class SyntheticDataIter(DataIter):
         return [mx.io.DataDesc('data', self.data.shape, self.dtype)]
     @property
     def provide_label(self):
-        return [mx.io.DataDesc('softmax_label', (self.batch_size,), self.dtype)]
+        return [mx.io.DataDesc('prob_label', (self.batch_size,), self.dtype)]
     def next(self):
         self.cur_iter += 1
         if self.cur_iter <= self.max_iter:
@@ -99,7 +99,7 @@ def get_rec_iter(args, kv=None):
             dtype = np.float16
     if 'benchmark' in args and args.benchmark:
         data_shape = (args.batch_size,) + image_shape
-        train = SyntheticDataIter(args.num_classes, data_shape, 50, dtype)
+        train = SyntheticDataIter(args.num_classes, data_shape, 10, dtype)
         return (train, None)
     if kv:
         (rank, nworker) = (kv.rank, kv.num_workers)

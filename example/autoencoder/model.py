@@ -46,11 +46,11 @@ class MXModel(object):
 
     def save(self, fname):
         args_save = {key: v.asnumpy() for key, v in self.args.items()}
-        with open(fname, 'wb') as fout:
+        with open(fname, 'w') as fout:
             pickle.dump(args_save, fout)
 
     def load(self, fname):
-        with open(fname, 'rb') as fin:
+        with open(fname) as fin:
             args_save = pickle.load(fin)
             for key, v in args_save.items():
                 if key in self.args:

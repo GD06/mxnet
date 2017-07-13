@@ -104,6 +104,7 @@ def fit(args, network, data_loader, **kwargs):
     # data iterators
     (train, val) = data_loader(args, kv)
     if args.test_io:
+        logging.info("Test IO bandwidth")
         tic = time.time()
         for i, batch in enumerate(train):
             for j in batch.data:
@@ -138,7 +139,8 @@ def fit(args, network, data_loader, **kwargs):
     # create model
     model = mx.mod.Module(
         context       = devs,
-        symbol        = network
+        symbol        = network,
+        label_names   = ['prob_label']
     )
 
     lr_scheduler  = lr_scheduler
@@ -146,17 +148,22 @@ def fit(args, network, data_loader, **kwargs):
             'learning_rate': lr,
             'momentum' : args.mom,
             'wd' : args.wd,
-            'lr_scheduler': lr_scheduler,
-            'multi_precision': True}
+            'lr_scheduler': lr_scheduler}
 
     monitor = mx.mon.Monitor(args.monitor, pattern=".*") if args.monitor > 0 else None
 
-    if args.network == 'alexnet':
+    initializer = mx.init.Load(os.path.join(os.environ['FRAMEWARK_DIR'],
+                                "models/training_model/%s_mxnet-0000.params" %
+                                            args.network),
+                               default_init=mx.init.Xavier(rnd_type="gaussian",
+                                                            factor_type="in",
+                                                            magnitude=2))
+    #if args.network == 'alexnet':
         # AlexNet will not converge using Xavier
-        initializer = mx.init.Normal()
-    else:
-        initializer = mx.init.Xavier(
-            rnd_type='gaussian', factor_type="in", magnitude=2)
+    #    initializer = mx.init.Normal()
+    #else:
+    #    initializer = mx.init.Xavier(
+    #        rnd_type='gaussian', factor_type="in", magnitude=2)
     # initializer   = mx.init.Xavier(factor_type="in", magnitude=2.34),
 
     # evaluation metrices
