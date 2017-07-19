@@ -90,7 +90,7 @@ def _convert_conv_param(param):
 def _convert_pooling_param(param):
     """Convert the pooling layer parameter
     """
-    param_string = "pooling_convention='full', "
+    param_string = "pooling_convention='valid', "
     if param.global_pooling:
         param_string += "global_pool=True, kernel=(1,1)"
     else:
